@@ -1,0 +1,38 @@
+revblc: trace-reversible BLC-syntax Krivine reducer
+mode: Bennett-style residual trace + compute-copy-uncompute
+source: Tromp IOCCC 2012 Krivine core; RosettaCode Phix as readable cross-reference
+scope: raw BLC term reducer, not full Tromp ULM input/output
+input bits: 0100100010
+decoded: (\.0 \.0)
+
+initial:
+  control: (\.0 \.0) {env_depth=0} | stack=0 | residual_items=0 | residual_bits=0 | payload_bits=11
+
+forward:
+  1 app payload 11 -> 11, residual 0 -> 1
+      push argument closure; continue with function; save app marker
+  2 abs payload 11 -> 11, residual 1 -> 2
+      pop argument into environment; continue with body; save abs marker
+  3 var payload 11 -> 16, residual 2 -> 11
+      replace variable by environment closure; save index and old environment
+
+stop status:
+  weak-head normal form: yes
+  stuck free variable: no
+
+result closure copied to clean output before uncompute:
+  closure: \.0 {env_depth=0}
+  term projection: \.0
+  blc projection:  0010
+  control: \.0 {env_depth=0} | stack=0 | residual_items=3 | residual_bits=11 | payload_bits=16
+
+uncompute trace:
+  3 var restored one var transition
+  2 abs restored one abs transition
+  1 app restored one app transition
+
+restored original state after uncompute: yes
+forward steps: 3
+backward steps: 3
+final control after uncompute: (\.0 \.0) {env_depth=0}
+copied output retained: \.0 {env_depth=0}

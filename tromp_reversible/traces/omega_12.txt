@@ -1,0 +1,21 @@
+tromp_rev: reversible instrumentation of Tromp/Krivine core
+mode: bit, prelude: on
+program bits: 010001101000011010
+runtime input bytes: 0
+decoded root: (\.(0 0) \.(0 0))
+snapshot: post-parse, pre-reduce
+
+forward:
+  steps: 12
+  exit code: 124
+  residual entries: 88
+  current term: 0
+  output bytes buffered: 0
+
+backward:
+  heap restored: yes
+  scalars restored: yes
+  kLazy restored: yes
+  output buffer empty: yes
+  input logically unconsumed: yes
+  round trip: yes
