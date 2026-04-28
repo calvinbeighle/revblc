@@ -121,6 +121,140 @@ def joint_entropy_triple(deltas):
     return shannon(Counter(deltas))
 
 
+class ArithCoder:
+    """Textbook bit-level arithmetic coder with E1/E2/E3 renormalization.
+    32-bit precision; total of any frequency model must stay < 2**29 so the
+    rng*cum products do not overflow before the // total step."""
+
+    PRECISION = 32
+    TOP = 1 << PRECISION
+    HALF = TOP >> 1
+    QUARTER = TOP >> 2
+    THREE_Q = HALF + QUARTER
+
+    def __init__(self):
+        self.low = 0
+        self.high = self.TOP - 1
+        self.bits = bytearray()
+        self.pending = 0
+
+    def _emit(self, bit):
+        self.bits.append(bit)
+        for _ in range(self.pending):
+            self.bits.append(1 - bit)
+        self.pending = 0
+
+    def encode(self, cum_lo, cum_hi, total):
+        rng = self.high - self.low + 1
+        self.high = self.low + (rng * cum_hi) // total - 1
+        self.low = self.low + (rng * cum_lo) // total
+        while True:
+            if self.high < self.HALF:
+                self._emit(0)
+            elif self.low >= self.HALF:
+                self._emit(1)
+                self.low -= self.HALF
+                self.high -= self.HALF
+            elif self.low >= self.QUARTER and self.high < self.THREE_Q:
+                self.pending += 1
+                self.low -= self.QUARTER
+                self.high -= self.QUARTER
+            else:
+                break
+            self.low <<= 1
+            self.high = (self.high << 1) | 1
+
+    def finish(self):
+        self.pending += 1
+        self._emit(0 if self.low < self.QUARTER else 1)
+        n = (len(self.bits) + 7) // 8
+        out = bytearray(n)
+        for i, b in enumerate(self.bits):
+            if b:
+                out[i >> 3] |= 1 << (7 - (i & 7))
+        return bytes(out)
+
+
+def varint_encode(n):
+    out = bytearray()
+    while n >= 128:
+        out.append((n & 0x7F) | 0x80)
+        n >>= 7
+    out.append(n & 0x7F)
+    return bytes(out)
+
+
+def zigzag(n):
+    return (n << 1) if n >= 0 else ((-n) << 1) - 1
+
+
+def encode_log_adaptive(records):
+    """Arithmetic-code the residual log over the joint-delta alphabet using
+    online frequency adaptation (Method A): start with a single ESCAPE
+    symbol of count 1; encode seen-before symbols against the current
+    counts; on a new symbol, encode ESCAPE then transmit (tag, zigzag(ad),
+    zigzag(od)) as varints with each byte uniformly distributed over [0,
+    256). Then add the new symbol with count 1.
+
+    No header. Returns (total_bytes, 0, payload_bytes) so the column lines
+    up with the static encoder."""
+    deltas = delta_records(records)
+    ESCAPE = "__ESC__"
+    freq = {ESCAPE: 1}
+    order = [ESCAPE]
+    coder = ArithCoder()
+    for d in deltas:
+        total = sum(freq.values())
+        if d in freq:
+            cum_lo = 0
+            for s in order:
+                if s == d:
+                    break
+                cum_lo += freq[s]
+            coder.encode(cum_lo, cum_lo + freq[d], total)
+            freq[d] += 1
+        else:
+            coder.encode(0, 1, total)  # ESCAPE always at index 0
+            tag, ad, od = d
+            for v in (tag, zigzag(ad), zigzag(od)):
+                for byte in varint_encode(v):
+                    coder.encode(byte, byte + 1, 256)
+            freq[d] = 1
+            order.append(d)
+    payload = coder.finish()
+    return len(payload), 0, len(payload)
+
+
+def encode_log(records):
+    """Arithmetic-code the residual log over the joint-delta alphabet
+    (tag, addr_delta_within_tag, old_delta_within_tag).
+    Returns (total_bytes, header_bytes, payload_bytes)."""
+    deltas = delta_records(records)
+    counts = Counter(deltas)
+    syms = sorted(counts.keys())
+    cum, c = {}, 0
+    for s in syms:
+        cum[s] = c
+        c += counts[s]
+    total = c
+
+    header = bytearray(b"ARITH001")
+    header += varint_encode(len(records))
+    header += varint_encode(len(syms))
+    for tag, ad, od in syms:
+        header += varint_encode(tag)
+        header += varint_encode(zigzag(ad))
+        header += varint_encode(zigzag(od))
+        header += varint_encode(counts[(tag, ad, od)])
+
+    coder = ArithCoder()
+    for d in deltas:
+        coder.encode(cum[d], cum[d] + counts[d], total)
+    payload = coder.finish()
+
+    return len(header) + len(payload), len(header), len(payload)
+
+
 def compressed_size(body, tool):
     if tool == "gzip":
         return len(gzip.compress(body, compresslevel=9))
@@ -158,6 +292,8 @@ def report(path):
     floor_per_entry_bits = H_joint_delta
     floor_bytes = floor_per_entry_bits * n / 8
 
+    coded_total, coded_hdr, coded_pay = encode_log(records)
+    adapt_total, _, adapt_pay = encode_log_adaptive(records)
     gz = compressed_size(body, "gzip")
     xz = compressed_size(body, "xz")
     zs = compressed_size(body, "zstd")
@@ -180,6 +316,16 @@ def report(path):
         print(f"  zstd --ultra -22      : {zs} bytes  (ratio {zs / raw:.3f})")
     if xz is not None:
         print(f"  xz -9e                : {xz} bytes  (ratio {xz / raw:.3f})")
+    print(
+        f"  custom static         : {coded_total} bytes "
+        f"(hdr {coded_hdr}, pay {coded_pay}, ratio {coded_total / raw:.3f}, "
+        f"vs floor {coded_total / max(floor_bytes, 1):.2f}x)"
+    )
+    print(
+        f"  custom adaptive       : {adapt_total} bytes "
+        f"(no hdr, ratio {adapt_total / raw:.3f}, "
+        f"vs floor {adapt_total / max(floor_bytes, 1):.2f}x)"
+    )
     print(f"  tag histogram:")
     for tag, c in sorted(tag_counts.items(), key=lambda kv: -kv[1]):
         name = TAG_NAMES.get(tag, f"?{tag}")
