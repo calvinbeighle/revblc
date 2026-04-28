@@ -403,12 +403,149 @@ def report(path):
     print()
 
 
+def deterministic_bound(program_path, krivine_args, krivine_bin):
+    """Run `krivine_bin <krivine_args>` twice, verify the dumps match
+    byte-for-byte, and return the size of a state-conditioned encoding
+    that includes only program bits + literal input + length prefixes.
+
+    Returns dict with keys: ok, program_size, input_size, bound.
+    `bound` is None if the runs disagree (non-deterministic execution)."""
+    import tempfile
+
+    program_size = os.path.getsize(program_path)
+    input_size = 0
+    for i, a in enumerate(krivine_args):
+        if a == "--input" and i + 1 < len(krivine_args):
+            input_size = len(krivine_args[i + 1])
+        elif a == "--input-file" and i + 1 < len(krivine_args):
+            input_size = os.path.getsize(krivine_args[i + 1])
+
+    with (
+        tempfile.NamedTemporaryFile(delete=False) as f1,
+        tempfile.NamedTemporaryFile(delete=False) as f2,
+    ):
+        for path, fobj in ((f1.name, f1), (f2.name, f2)):
+            fobj.close()
+            r = subprocess.run(
+                [krivine_bin] + krivine_args + ["--dump-residual", path],
+                capture_output=True,
+            )
+            if r.returncode != 0:
+                return {
+                    "ok": False,
+                    "program_size": program_size,
+                    "input_size": input_size,
+                    "bound": None,
+                    "err": r.stderr.decode("utf-8", "replace")[:200],
+                }
+        ok = open(f1.name, "rb").read() == open(f2.name, "rb").read()
+        os.unlink(f1.name)
+        os.unlink(f2.name)
+
+    bound = (program_size + input_size + 4) if ok else None
+    return {
+        "ok": ok,
+        "program_size": program_size,
+        "input_size": input_size,
+        "bound": bound,
+    }
+
+
+CORPUS = [
+    ("identity_app", "examples/identity_app.blc", []),
+    ("k_i_i", "examples/k_i_i.blc", []),
+    ("cat (bit)", "examples/cat.blc", ["--input", "01010101"]),
+    ("cat (byte)", "examples/cat.blc", ["--byte", "--input", "Hello"]),
+    ("reverse.Blc", "examples/reverse.Blc", ["--byte", "--input", "abcdefgh"]),
+]
+
+
+def run_corpus(krivine_bin):
+    import tempfile
+
+    rows = []
+    for name, prog, args in CORPUS:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".rlog") as f:
+            f.close()
+            r = subprocess.run(
+                [krivine_bin, prog] + args + ["--dump-residual", f.name],
+                capture_output=True,
+            )
+            if r.returncode != 0:
+                print(f"{name}: krivine_rev failed", file=sys.stderr)
+                continue
+            body, records = load(f.name)
+            os.unlink(f.name)
+        n = len(records)
+        raw = n * REC_SIZE
+        deltas = delta_records(records)
+        floor_b = joint_entropy_triple(deltas) * n / 8
+        gz = compressed_size(body, "gzip")
+        zs = compressed_size(body, "zstd")
+        xz = compressed_size(body, "xz")
+        st_total, _, _ = encode_log(records)
+        ad_total, _, _ = encode_log_adaptive(records)
+        cx_total, _, _ = encode_log_context(records)
+        bd = deterministic_bound(prog, [prog] + args, krivine_bin)
+        rows.append(
+            {
+                "name": name,
+                "entries": n,
+                "raw": raw,
+                "floor": int(floor_b),
+                "gzip": gz,
+                "zstd": zs,
+                "xz": xz,
+                "static": st_total,
+                "adaptive": ad_total,
+                "ctx": cx_total,
+                "bound": bd["bound"],
+                "det_ok": bd["ok"],
+                "prog_size": bd["program_size"],
+                "input_size": bd["input_size"],
+            }
+        )
+
+    print(
+        f"{'program':<14} {'entries':>8} {'raw':>8} {'floor':>6} "
+        f"{'gzip':>6} {'zstd':>6} {'xz':>6} "
+        f"{'static':>7} {'adapt':>6} {'ctx':>6} {'bound':>6}"
+    )
+    print("-" * 100)
+    for r in rows:
+        b = (
+            (str(r["bound"]) + ("" if r["det_ok"] else " !"))
+            if r["bound"] is not None
+            else "FAIL"
+        )
+        print(
+            f"{r['name']:<14} {r['entries']:>8} {r['raw']:>8} {r['floor']:>6} "
+            f"{r['gzip']:>6} {r['zstd']:>6} {r['xz']:>6} "
+            f"{r['static']:>7} {r['adaptive']:>6} {r['ctx']:>6} {b:>6}"
+        )
+    print()
+    print("bound = program_bytes + input_bytes + 4 (length prefixes)")
+    print("Trace is deterministic given (program, input); decoder re-runs the")
+    print("Krivine machine to reproduce the residual log.")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("paths", nargs="+")
+    ap.add_argument("paths", nargs="*")
+    ap.add_argument(
+        "--corpus", action="store_true", help="run the full corpus (overrides paths)"
+    )
+    ap.add_argument(
+        "--krivine",
+        default="./instrumented_krivine/krivine_rev",
+        help="path to krivine_rev binary",
+    )
     args = ap.parse_args()
-    for p in args.paths:
-        report(p)
+    if args.corpus:
+        run_corpus(args.krivine)
+    else:
+        for p in args.paths:
+            report(p)
 
 
 if __name__ == "__main__":
