@@ -75,13 +75,36 @@ program runtime, so on long-running programs (e.g. Tromp's `lambda-8cc`
 compiling C, ~2 min) replay loses to xz by orders of magnitude. The
 tradeoff is cheap on short programs and painful on long ones.
 
-## What's actually new
+## Further research
 
-The empirical residual-entropy measurement of a reversible BLC/Krivine
-evaluator and the comparison against the deterministic-replay bound. The
-arithmetic coders and trace reversibility are textbook; the dump-and-
-diff is a one-liner. The number worth noticing is the gap between the
-zeroth-order entropy floor (7036 B for reverse.Blc) and the
-deterministic-replay bound (21 B): three orders of magnitude of
-"redundant" information in a log that was already considered minimal for
-reversibility.
+- **Build the replay coder.** The deterministic bound is computed by
+  direct verification (run twice, `cmp`), not by an end-to-end coder. A
+  real implementation would emit `(program_bits, input_bytes,
+length_prefix)` and ship a decoder that re-runs `krivine_rev` to
+  reconstruct the residual log. Engineering, not research.
+
+- **Try a state-conditioned coder.** Without re-simulation. Extend the
+  C dump with snapshots of `(H, C, D, a, c)` at each entry and let the
+  Python coder predict `addr/old` from those scalars. Many residuals
+  collapse to 0 bits (scalar updates trivially, heap allocs from `H`).
+  This pushes the floor itself down without paying replay-time CPU.
+
+- **Larger corpus.** Five programs is small. Run on Tromp's RosettaCode
+  tasks, on Justine's published `.Blc` corpus, and on a self-interpreter
+  layer (BLC running on BLC) to see how the numbers move with program
+  complexity and self-application.
+
+- **Decode-time scaling.** Replay tied with `xz -d` here only because
+  these programs are short. On `lambda-8cc` compiling C (~2 min), replay
+  loses to xz by orders of magnitude. Quantify the crossover where the
+  wire-bytes-vs-decode-CPU tradeoff flips.
+
+- **Other reversible abstract machines.** SECD, CEK, interaction-net
+  reducers (HVM). Whether the empirical-gap shape is interpreter-specific
+  or a general property of deterministic reducers is open.
+
+- **Apply to time-travel debuggers.** rr, undo.io, and friends have a
+  similar problem (compress a deterministic execution trace). The
+  zeroth-order/first-order coder results here may already be implicit in
+  their work; the explicit comparison against an entropy floor is what
+  is missing from this repo's literature search so far.
