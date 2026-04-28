@@ -22,19 +22,21 @@ parity against Tromp's `uni`.
 of trace logging (erasure / linear / duplication witnesses).
 
 `measure.py` reports zeroth-order joint-delta entropy of the residual
-log and runs two arithmetic coders over the same alphabet: a static
-two-pass coder with a serialized frequency table, and an online adaptive
-coder (Method A: ESCAPE + literal varint for new symbols).
+log and runs three arithmetic coders over the same alphabet: a static
+two-pass coder with a serialized frequency table, an online zeroth-order
+adaptive coder (Method A: ESCAPE + literal varint for new symbols), and
+a first-order context coder (PPM-A style, conditioning on the previous
+symbol's tag, falling back to a global table on miss).
 
 ## Residual entropy and custom coders
 
-| program      | input      | entries |    raw | floor B |  gzip |  zstd |    xz |    static (hdr+pay) | adaptive |
-| ------------ | ---------- | ------: | -----: | ------: | ----: | ----: | ----: | ------------------: | -------: |
-| identity_app | -          |      74 |   1480 |      44 |   243 |   214 |   260 |      244 = 200 + 44 |  **190** |
-| k_i_i        | -          |      90 |   1800 |      54 |   291 |   248 |   296 |      275 = 220 + 55 |  **215** |
-| cat (bit)    | `01010101` |     863 |  17260 |     645 |  2181 |  1356 |  1380 |   1775 = 1129 + 646 |     1520 |
-| cat (byte)   | `Hello`    |    4515 |  90300 |    3550 | 11374 |  6655 |  5688 |  7269 = 3719 + 3550 |     6500 |
-| reverse.Blc  | `abcdefgh` |    8504 | 170080 |    7037 | 20761 | 12222 | 10164 | 14041 = 7004 + 7037 |    12613 |
+| program      | input      | entries |    raw | floor B |  gzip |  zstd |    xz | static | adaptive | ctx (prev_tag) |
+| ------------ | ---------- | ------: | -----: | ------: | ----: | ----: | ----: | -----: | -------: | -------------: |
+| identity_app | -          |      74 |   1480 |      44 |   243 |   214 |   260 |    244 |  **190** |            195 |
+| k_i_i        | -          |      90 |   1800 |      54 |   291 |   248 |   296 |    275 |  **215** |            222 |
+| cat (bit)    | `01010101` |     863 |  17260 |     645 |  2181 |  1356 |  1380 |   1775 |     1520 |           1446 |
+| cat (byte)   | `Hello`    |    4515 |  90300 |    3550 | 11374 |  6655 |  5688 |   7269 |     6500 |           5906 |
+| reverse.Blc  | `abcdefgh` |    8504 | 170080 |    7037 | 20761 | 12222 | 10164 |  14041 |    12613 |          11720 |
 
 Floor = zeroth-order joint entropy of `(tag, addr_delta, old_delta)` with
 deltas taken per-tag. zstd `--ultra -22`; xz `-9e`. Bold = beats every
@@ -45,23 +47,31 @@ Tag distribution is interpreter-shaped, not program-shaped (`heap ~28%`,
 
 ## Did the custom coders close the gap?
 
-Partly. Three findings:
+Partly. Four findings:
 
 1. **Static coder hits the entropy floor on payload to within 1 byte**
    on every program, but its serialized frequency table inflates the
    total. xz/zstd beat it on every row.
 
-2. **Adaptive coder beats zstd on three programs and beats xz on the two
-   smallest.** Removing the header is enough to win on short logs; the
-   crossover with xz happens around ~1000 residual entries.
+2. **Adaptive coder beats xz on the two smallest programs** (190 vs 260,
+   215 vs 296) and beats zstd on cat (byte) and reverse.Blc. The
+   crossover with xz on long logs happens because the coder is still
+   zeroth-order.
 
-3. **xz still wins on the three longest logs.** Best ratio achieved on
-   reverse.Blc: 10164 B (xz) vs 7037 B floor — gap ~1.44×. Adaptive on
-   the same log: 12613 B, gap ~1.79×.
+3. **Context coder (PPM-A on previous tag) beats adaptive on every
+   medium/long log**, narrowing the gap on reverse.Blc from 1.79× the
+   floor (adaptive) to 1.67× (ctx). Loses to adaptive on the smallest
+   logs because the per-context tables are too sparse to help.
 
-The remaining gap is the price of a zeroth-order model. Both custom
-coders encode each symbol independently. xz's LZMA captures sequence
-structure (e.g. `TAG_HEAP` is frequently followed by `TAG_a`). Closing
-that gap requires either first-order context modeling (`P(d | prev_d)`)
-or a state-conditioned predictor that uses the machine state (`H`, `C`,
-`D`, ...) at each step. Both unimplemented.
+4. **xz still wins on the three longest logs.** Best ratio achieved on
+   reverse.Blc: 10164 B (xz) vs 7037 B floor — gap ~1.44×. Our best on
+   the same log: 11720 B (ctx), gap ~1.67×.
+
+The remaining gap is what xz's LZMA captures and our zeroth-/first-order
+coders do not: longer-range sequence structure and dictionary matching.
+Closing it further with a "language-model" coder is a competition we
+will keep losing. The genuinely different move is a state-conditioned
+predictor: at each step, predict `addr/old` from the current machine
+state (`H`, `C`, `D`, ...) of the reversible Krivine evaluator. Many
+residuals are then ~0 bits because they are determined by state already
+known at decode time. Unimplemented.

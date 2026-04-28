@@ -225,6 +225,70 @@ def encode_log_adaptive(records):
     return len(payload), 0, len(payload)
 
 
+class _CtxModel:
+    """Adaptive Method-A model. Symbol -> count. Insertion-ordered for
+    deterministic cumulative computation. Fixed ESCAPE at index 0."""
+
+    __slots__ = ("freq", "order")
+
+    def __init__(self):
+        self.freq = {"__ESC__": 1}
+        self.order = ["__ESC__"]
+
+    def encode_or_escape(self, coder, sym):
+        """If `sym` is known: encode it, increment count, return True.
+        Otherwise: encode ESCAPE, return False (caller must fall back)."""
+        total = sum(self.freq.values())
+        if sym in self.freq:
+            cum_lo = 0
+            for s in self.order:
+                if s == sym:
+                    break
+                cum_lo += self.freq[s]
+            coder.encode(cum_lo, cum_lo + self.freq[sym], total)
+            self.freq[sym] += 1
+            return True
+        coder.encode(0, 1, total)  # ESCAPE always at index 0
+        return False
+
+    def add(self, sym):
+        if sym not in self.freq:
+            self.freq[sym] = 1
+            self.order.append(sym)
+
+
+def encode_log_context(records):
+    """Adaptive arithmetic coding with context = previous symbol's tag.
+    Per-context table on top, falls back to a shared global table on
+    miss, falls back to literal varints on global miss. PPM-A style.
+    Returns (total_bytes, 0, payload_bytes)."""
+    deltas = delta_records(records)
+    coder = ArithCoder()
+    glob = _CtxModel()
+    ctxs = {}
+    prev_tag = -1  # BOS
+
+    for d in deltas:
+        c = ctxs.setdefault(prev_tag, _CtxModel())
+        if c.encode_or_escape(coder, d):
+            glob.freq[d] = glob.freq.get(d, 0) + 1
+            if glob.freq[d] == 1:
+                glob.order.append(d)
+        elif glob.encode_or_escape(coder, d):
+            c.add(d)
+        else:
+            tag, ad, od = d
+            for v in (tag, zigzag(ad), zigzag(od)):
+                for byte in varint_encode(v):
+                    coder.encode(byte, byte + 1, 256)
+            glob.add(d)
+            c.add(d)
+        prev_tag = d[0]
+
+    payload = coder.finish()
+    return len(payload), 0, len(payload)
+
+
 def encode_log(records):
     """Arithmetic-code the residual log over the joint-delta alphabet
     (tag, addr_delta_within_tag, old_delta_within_tag).
@@ -294,6 +358,7 @@ def report(path):
 
     coded_total, coded_hdr, coded_pay = encode_log(records)
     adapt_total, _, adapt_pay = encode_log_adaptive(records)
+    ctx_total, _, ctx_pay = encode_log_context(records)
     gz = compressed_size(body, "gzip")
     xz = compressed_size(body, "xz")
     zs = compressed_size(body, "zstd")
@@ -325,6 +390,11 @@ def report(path):
         f"  custom adaptive       : {adapt_total} bytes "
         f"(no hdr, ratio {adapt_total / raw:.3f}, "
         f"vs floor {adapt_total / max(floor_bytes, 1):.2f}x)"
+    )
+    print(
+        f"  custom ctx (prev_tag) : {ctx_total} bytes "
+        f"(no hdr, ratio {ctx_total / raw:.3f}, "
+        f"vs floor {ctx_total / max(floor_bytes, 1):.2f}x)"
     )
     print(f"  tag histogram:")
     for tag, c in sorted(tag_counts.items(), key=lambda kv: -kv[1]):
