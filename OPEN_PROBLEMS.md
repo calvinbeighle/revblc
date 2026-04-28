@@ -4,8 +4,8 @@ These are the places where the toy becomes interesting.
 
 ## 0. External Interpreter Parity
 
-`tromp_reversible/tromp.c` is now the literal-answer track: it is an un-golfed,
-standalone Tromp/Krivine-core derivative with residual logging and backward
+`instrumented_krivine/tromp.c` is now the literal-answer track: it is an un-golfed,
+standalone BLC/Krivine-core derivative with residual logging and backward
 verification.
 
 The Tromp/Justine runtime wrapper is now present: the user program is applied
@@ -22,7 +22,7 @@ External parity against Tromp's `uni` is now reproducible with:
 ```sh
 git clone https://github.com/tromp/AIT /tmp/AIT
 make -C /tmp/AIT uni
-cd revblc/tromp_reversible
+cd revblc/instrumented_krivine
 make test-reference
 ```
 
@@ -63,7 +63,7 @@ visible state. It is useful because it shows the right information accounting:
 erasure carries the erased argument, linear use carries an occurrence boundary,
 and duplication carries an occurrence group.
 
-The harder Discord idea is a complete native reversible binary calculus where
+The harder goal is a complete native reversible binary calculus where
 all reduction rules are bijections on the visible term/state and do not rely on
 a separate trace stack. That is not implemented here yet.
 

@@ -1,4 +1,4 @@
-tromp_rev: reversible instrumentation of Tromp/Krivine core
+krivine_rev: reversible instrumentation of BLC/Krivine core
 mode: bit, prelude: on
 program bits: 010001101000011010
 runtime input bytes: 0

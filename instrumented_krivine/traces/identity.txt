@@ -1,17 +1,17 @@
-tromp_rev: reversible instrumentation of Tromp/Krivine core
-mode: byte, prelude: on
+krivine_rev: reversible instrumentation of BLC/Krivine core
+mode: bit, prelude: on
 program bits: 0010
-runtime input bytes: 1
+runtime input bytes: 0
 decoded root: \.0
 snapshot: post-parse, pre-reduce
 
 forward:
-  steps: 146
+  steps: 10
   exit code: 0
-  residual entries: 951
+  residual entries: 55
   current term: \.0
-  output bytes buffered: 1
-A
+  output bytes buffered: 0
+
 backward:
   heap restored: yes
   scalars restored: yes

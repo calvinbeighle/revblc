@@ -53,3 +53,21 @@ This is `((\.\\.0) (\.0))`. The outer bound variable is erased by beta, so
 This is `((\.(0 0)) (\.0))`. The bound variable is duplicated by beta, so
 `native_beta` carries the group of occurrence paths that fold the copies back
 into one argument.
+
+
+`omega.blc`
+
+```text
+010001101000011010
+```
+
+This is the usual non-terminating omega example. The tests run it with a step
+limit to verify partial traces can still be reversed.
+
+## I/O examples
+
+`io/cat.blc` is readable ASCII BLC for identity (`0010`). With the runtime
+wrapper, identity copies the lazy input list to the output continuations.
+
+`io/reverse.Blc` is a packed byte-mode reverse program used so the tests cover
+a real packed `.Blc` input, not only local readable examples.

@@ -1,7 +1,7 @@
 // Public Domain
 // Author: John Tromp
 // Source: IOCCC 2012
-// Posted to redbean #lambda by jartine on 2026-04-19 as a starting point
+// John Tromp IOCCC 2012 BLC/Krivine source kept as a reference point.
 // for a reversible BLC project.
 #include "libc/runtime/runtime.h"
 #include "tool/lambda/lib/blc.h"

@@ -1,11 +1,6 @@
-# tromp_reversible
+# instrumented_krivine
 
-This directory is the answer-track for Justine's literal prompt:
-
-```text
-change Tromp's lambda calculus interpreter so that everything it does is
-reversible
-```
+Reversible instrumentation for a BLC/Krivine evaluator.
 
 The reference source is:
 
@@ -13,8 +8,8 @@ The reference source is:
 ../reference/tromp-krivine-ioccc2012.c
 ```
 
-That file is the IOCCC 2012 Tromp source as pasted in redbean `#lambda`. It
-uses Cosmopolitan headers and a heavily golfed comma-cascade. `tromp.c` is the
+That file is the IOCCC 2012 Tromp source. It uses Cosmopolitan headers
+and a heavily golfed comma-cascade. `tromp.c` is the
 standalone, un-golfed C version of the same Krivine-core transition structure,
 with reversible instrumentation around every reducer mutation.
 
@@ -34,18 +29,18 @@ make
 or:
 
 ```sh
-cc -std=c99 -Wall -Wextra -pedantic -O2 -o tromp_rev tromp.c
+cc -std=c99 -Wall -Wextra -pedantic -O2 -o krivine_rev tromp.c
 ```
 
 ## Run
 
 ```sh
-./tromp_rev examples/identity_app.blc
-printf '0100100010' | ./tromp_rev -
-./tromp_rev examples/io/cat.blc --input 0101
-./tromp_rev examples/io/cat.blc --byte --input A
-./tromp_rev examples/io/reverse.Blc --byte --input abc
-./tromp_rev examples/omega.blc --max-steps 12
+./krivine_rev ../examples/identity_app.blc
+printf '0100100010' | ./krivine_rev -
+./krivine_rev ../examples/io/cat.blc --input 0101
+./krivine_rev ../examples/io/cat.blc --byte --input A
+./krivine_rev ../examples/io/reverse.Blc --byte --input abc
+./krivine_rev ../examples/omega.blc --max-steps 12
 make test
 make test-reference
 make traces
@@ -77,7 +72,7 @@ because its old value is recorded.
 
 ## Phase Status
 
-- Phase 0, standalone compile: done for the un-golfed Tromp/Krivine core.
+- Phase 0, standalone compile: done for the un-golfed BLC/Krivine core.
 - Phase 1, residual log: done in `rlog.h`.
 - Phase 2, instrument mutations: done for the exposed reducer mutations in
   `tromp.c`.
@@ -118,7 +113,7 @@ This is not `revblc.c` and it is not `native_beta.c`.
   Krivine reducer.
 - `../native_beta.c` is the native-rule experiment for one reversible beta
   transition.
-- `tromp.c` is the Tromp-answer track: un-golf the Tromp/Krivine core, log
+- `tromp.c` is the Tromp-answer track: un-golf the BLC/Krivine core, log
   each mutable operation, then verify restoration against a byte snapshot.
 
 This version runs the raw BLC examples in this directory through the
@@ -143,8 +138,8 @@ reversible run still reports `round trip: yes`.
 ## Example Output
 
 ```text
-$ ./tromp_rev examples/identity_app.blc
-tromp_rev: reversible instrumentation of Tromp/Krivine core
+$ ./krivine_rev ../examples/identity_app.blc
+krivine_rev: reversible instrumentation of BLC/Krivine core
 mode: bit, prelude: on
 program bits: 0100100010
 runtime input bytes: 0

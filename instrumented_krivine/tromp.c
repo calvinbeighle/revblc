@@ -1,5 +1,5 @@
 /*
- * tromp.c - reversible instrumentation of the Tromp/Krivine core.
+ * tromp.c - reversible instrumentation of the BLC/Krivine core.
  *
  * This is the "literal ask" work area: a standalone, un-golfed C derivative
  * of the transition structure in John Tromp's IOCCC 2012 lambda interpreter.
@@ -1005,7 +1005,7 @@ int main(int argc, char **argv) {
 
     snapshot_state();
 
-    fprintf(stderr, "tromp_rev: reversible instrumentation of Tromp/Krivine core\n");
+    fprintf(stderr, "krivine_rev: reversible instrumentation of BLC/Krivine core\n");
     fprintf(stderr, "mode: %s, prelude: %s\n", m ? "byte" : "bit",
             use_prelude ? "on" : "off");
     fprintf(stderr, "program bits: %s\n", bits);

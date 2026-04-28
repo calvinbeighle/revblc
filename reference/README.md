@@ -6,9 +6,8 @@ Primary reference:
 tromp-krivine-ioccc2012.c
 ```
 
-This is the John Tromp IOCCC 2012 Krivine machine that jartine pasted into
-redbean `#lambda` on 2026-04-19 as the starting point for a reversible BLC
-project.
+This is John Tromp's IOCCC 2012 Krivine machine, kept here as the reference
+anchor for the BLC/Krivine transition structure.
 
 Secondary readable cross-reference:
 

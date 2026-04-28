@@ -1,102 +1,86 @@
 # revblc
 
-`revblc` contains three small C artifacts:
+Reversible execution experiments for Binary Lambda Calculus (BLC).
 
-- `tromp_reversible/`: the answer-track for Justine's literal Tromp prompt.
-- `revblc.c`: a tiny trace-reversible BLC-syntax Krivine reducer.
-- `native_beta.c`: one native reversible beta rule with collision witnesses.
-
-It is meant to be the smallest useful artifact for the redbean `#lambda`
-discussion: something you can compile, run, mutate, and argue with.
-
-The project is anchored on the C Krivine machine jartine pasted from John
-Tromp's IOCCC 2012 entry as the starting point for this project. It also keeps
-the RosettaCode Phix Universal Lambda Machine around as a readable
-cross-reference.
-
-The relevant transition shapes are:
+`revblc` explores a simple question:
 
 ```text
-VAR  variable lookup
-APP  application
-ABS  abstraction
+What information must a lambda-calculus evaluator preserve if we want to run it backward?
 ```
 
-The difference is that `revblc.c` records explicit Bennett-style residual state
-for every transition, copies the weak-head result closure, then runs the
-residuals backward to restore the original machine state.
-
-This is intentionally honest about its scope:
-
-- `revblc.c` is not a native reversible lambda calculus.
-- It is not Tromp's full universal machine input/output protocol.
-- It reduces raw lambda terms encoded in BLC syntax to weak-head normal form.
-
-`native_beta.c` is the first native-rule experiment. It applies one top-level
-beta step and returns an extended reversible state that carries only the
-erasure, boundary, or duplication witness needed to invert that beta step.
-
-## Build
-
-```sh
-make
-```
-
-or directly:
-
-```sh
-cc -std=c89 -Wall -Wextra -pedantic -O2 -o revblc revblc.c
-cc -std=c89 -Wall -Wextra -pedantic -O2 -o native_beta native_beta.c
-cd tromp_reversible && cc -std=c99 -Wall -Wextra -pedantic -O2 -o tromp_rev tromp.c
-```
-
-## Run
-
-```sh
-./revblc
-./revblc examples/identity_app.blc
-./revblc --bits 0100100010
-./native_beta examples/identity_app.blc
-./tromp_reversible/tromp_rev tromp_reversible/examples/identity_app.blc
-./tromp_reversible/tromp_rev tromp_reversible/examples/io/cat.blc --input 0101
-make native
-make traces
-```
-
-Default input:
-
-```text
-0100100010
-```
-
-which is:
-
-```text
-((\.0) (\.0))
-```
-
-## What It Shows
-
-A normal Krivine reducer computes forward:
+A normal evaluator computes:
 
 ```text
 program -> result
 ```
 
-`revblc` demonstrates Bennett-style compute-copy-uncompute:
+That loses information. This project makes the missing information explicit and
+checks that the computation can be reversed:
 
 ```text
-program -> result closure + residuals
-copy result closure
-run residuals backward
-original program state + copied result closure
+program -> result + residual state
+result + residual state -> program
 ```
 
-The important point is not speed. The important point is information
-accounting. If a step would normally throw away context, `revblc` makes the
-context visible as residual state.
+The repo contains three runnable C artifacts:
 
-For this tiny program, the forward trace is:
+```text
+revblc.c                  readable trace-reversible BLC reducer
+native_beta.c             native reversible beta-step experiment
+instrumented_krivine/     fuller instrumented evaluator with I/O and packed input tests
+```
+
+## Quick start
+
+```sh
+make test
+make test-reference
+```
+
+Run individual demos:
+
+```sh
+./revblc examples/identity_app.blc
+./native_beta examples/native_duplication.blc
+./instrumented_krivine/krivine_rev examples/io/cat.blc --input 0101
+./instrumented_krivine/krivine_rev examples/io/reverse.Blc --byte --input abc
+```
+
+## 1. `revblc.c`: trace-reversible reduction
+
+`revblc.c` is the readable baseline.
+
+It evaluates raw BLC syntax with the usual Krivine-style transitions:
+
+```text
+APP  application
+ABS  abstraction
+VAR  variable lookup
+```
+
+The forward run records the residual information needed to undo each step. Then
+it copies the result closure, runs the residuals backward, and checks that the
+original machine state is restored.
+
+Example:
+
+```sh
+./revblc examples/identity_app.blc
+```
+
+Input:
+
+```text
+0100100010
+```
+
+which encodes:
+
+```text
+((\.0) (\.0))
+```
+
+Forward trace:
 
 ```text
 app  push argument closure; continue with function; save app marker
@@ -104,46 +88,112 @@ abs  pop argument into environment; continue with body; save abs marker
 var  replace variable by environment closure; save index and old environment
 ```
 
-Then the reducer consumes those residuals backward and reconstructs the
-original application while retaining the copied result closure.
-
-## Why This Exists
-
-Justine Tunney suggested making Tromp's lambda calculus interpreter reversible:
-take the primitives of a Krivine machine and save enough information to undo
-them.
-
-This is not a full replacement for Tromp's IOCCC interpreter and it is not the
-native no-log reversible calculus Lewpen was gesturing at. It is a small,
-portable C workbench for making the trace-reversal baseline concrete before
-trying to beat it.
-
-The exact pasted Tromp source is included as:
+Backward trace:
 
 ```text
-reference/tromp-krivine-ioccc2012.c
+var -> abs -> app
 ```
 
-The Phix implementation from RosettaCode is included as a secondary readable
-reference in:
+The important observation is that `APP` and `ABS` only need compact markers, but
+`VAR` must preserve lookup context because lookup overwrites the current
+closure.
+
+## 2. `native_beta.c`: reversible beta without storing the whole redex
+
+`native_beta.c` explores a more interesting direction: make one beta step
+reversible as a calculus rule, not merely as a logged machine step.
+
+Ordinary beta reduction is many-to-one:
 
 ```text
-reference/rosettacode-phix.txt
+((\ body) arg) -> body[arg / 0]
 ```
 
-Original RosettaCode page: `https://rosettacode.org/wiki/Universal_Lambda_Machine#Phix`
+The reversible version returns an extended visible state:
 
-The `tromp_reversible/` directory is the place to look first if the question is
-"did you actually modify Tromp's interpreter path?" It un-golfs the
-Tromp/Krivine transition structure, records every reducer mutation in a
-residual log, runs backward, and verifies the heap/scalars against a pre-reduce
-snapshot. It now includes the Tromp/Justine runtime wrapper, lazy input-list
-expansion, `wr0`/`wr1`, bit-mode output, byte-mode output, and the `kLazy[256]`
-table. Packed `.Blc` program parsing is supported, and `make test-reference`
-compares packed cat and `reverse.Blc` byte-for-byte against Tromp's `uni`.
+```text
+((\ body) arg) <-> beta_witness(reduct, witness)
+```
 
-There is also a short pasteable note in `docs/discord-post.md`.
+The witness depends on how the bound variable is used:
 
-The native beta rule is documented in `docs/native-beta.md`.
+```text
+erasure      store the erased argument
+linear use   store the occurrence boundary
+duplication  store the occurrence group and verify equal copies fold back
+```
 
-The Tromp/Justine runtime protocol is documented in `docs/tromp-protocol.md`.
+Run:
+
+```sh
+./native_beta examples/native_erasure.blc
+./native_beta examples/identity_app.blc
+./native_beta examples/native_duplication.blc
+```
+
+This is the most novel piece in the repo. The trace reducers establish a
+baseline; `native_beta.c` tries to beat that baseline by storing the collision
+witness instead of the whole input.
+
+## 3. `instrumented_krivine/`: fuller evaluator instrumentation
+
+`instrumented_krivine/` is the larger executable harness.
+
+It records reducer mutations as residual state, runs the residual log backward,
+and verifies restoration of:
+
+```text
+heap/code arena
+machine scalars
+lazy input state
+output state
+```
+
+It also exercises runtime input/output and packed `.Blc` programs.
+
+Run:
+
+```sh
+cd instrumented_krivine
+make test
+make test-reference
+```
+
+Example checks report:
+
+```text
+heap restored: yes
+scalars restored: yes
+kLazy restored: yes
+output buffer empty: yes
+input logically unconsumed: yes
+round trip: yes
+```
+
+## Project layout
+
+```text
+revblc/
+├── README.md
+├── Makefile
+├── revblc.c
+├── native_beta.c
+├── instrumented_krivine/
+├── examples/
+├── reference/
+├── traces/
+├── NATIVE_BETA.md
+├── REVERSIBLE_KRIVINE.md
+├── TROMP_PROTOCOL.md
+├── OPEN_PROBLEMS.md
+└── REVIEW_REQUEST.md
+```
+
+## Scope
+
+This is not a complete native reversible lambda calculus.
+
+It is a working set of experiments for identifying and testing the residual
+information needed to reverse BLC evaluation steps. The trace-reversible
+reducers are the baseline. The native beta rule is the first step toward making
+individual calculus rules reversible over visible extended state.

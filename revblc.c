@@ -1,9 +1,8 @@
 /*
- * revblc.c - a tiny trace-reversible BLC-syntax Krivine reducer.
+ * revblc.c - a compact trace-reversible BLC-syntax Krivine reducer.
  *
  * Reference points:
- *   1. John Tromp's IOCCC 2012 BLC Krivine machine, pasted in redbean
- *      #lambda by jartine as the concrete starting point for this project.
+ *   1. John Tromp's IOCCC 2012 BLC Krivine machine.
  *   2. Rosetta Code "Universal Lambda Machine", Phix implementation, used
  *      as a readable spelling of the same VAR / APP / ABS transition shapes.
  *

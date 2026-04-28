@@ -1,7 +1,7 @@
 # Tromp / Justine Runtime Protocol
 
 This note documents the runtime protocol implemented by
-`tromp_reversible/tromp.c`.
+`instrumented_krivine/tromp.c`.
 
 Canonical references:
 
@@ -145,7 +145,7 @@ External reference parity is implemented as an optional test:
 ```sh
 git clone https://github.com/tromp/AIT /tmp/AIT
 make -C /tmp/AIT uni
-cd revblc/tromp_reversible
+cd revblc/instrumented_krivine
 make test-reference
 ```
 

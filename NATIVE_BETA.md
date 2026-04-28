@@ -97,7 +97,7 @@ terms before rebuilding the original redex.
 
 ## Why This Matters
 
-This is closer to the redbean `#lambda` discussion than a step logger because
+This is closer to a native reversible calculus than a step logger because
 the residual is about the calculus rule itself. The visible state changes so
 the beta transition is a bijection.
 
