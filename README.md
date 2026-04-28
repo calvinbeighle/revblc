@@ -4,13 +4,13 @@ Reversible BLC/Krivine evaluator with residual-stream entropy measurement.
 
 ```sh
 make test
-./instrumented_krivine/krivine_rev examples/io/cat.blc --input 0101 \
+./instrumented_krivine/krivine_rev examples/cat.blc --input 0101 \
   --dump-residual /tmp/cat.rlog
-python3 tools/measure.py /tmp/cat.rlog
+python3 measure.py /tmp/cat.rlog
 ```
 
 `instrumented_krivine/tromp.c` is an un-golfed standalone C version of
-Tromp's IOCCC 2012 Krivine core (`reference/tromp-krivine-ioccc2012.c`,
+Tromp's IOCCC 2012 Krivine core (`tromp-krivine-ioccc2012.c`,
 Public Domain) with residual logging around every reducer mutation.
 Forward run records `(tag, addr, old)` triples; backward run consumes them
 and verifies heap, scalars, `kLazy`, output buffer, and input position

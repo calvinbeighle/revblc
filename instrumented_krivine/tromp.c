@@ -5,7 +5,7 @@
  * of the transition structure in John Tromp's IOCCC 2012 lambda interpreter.
  * The original pasted source is kept at:
  *
- *   ../reference/tromp-krivine-ioccc2012.c
+ *   ../tromp-krivine-ioccc2012.c
  *
  * The IOCCC expression is intentionally not preserved here. The point of this
  * file is to expose every mutable operation, log the old value, run forward,
@@ -892,7 +892,7 @@ static void print_usage(const char *argv0) {
  *   magic     "RLOG0001" (8 bytes)
  *   count     int64_le
  *   then count records of (tag:int32_le, addr:int64_le, old:int64_le).
- * Header writes are little-endian regardless of host so tools/measure.py
+ * Header writes are little-endian regardless of host so measure.py
  * can mmap/struct.unpack without worrying about portability.
  */
 static int dump_residual_log(const char *path, long start, long end) {
