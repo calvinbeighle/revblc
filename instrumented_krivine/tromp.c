@@ -14,6 +14,7 @@
  */
 
 #include <ctype.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -882,8 +883,47 @@ static void print_usage(const char *argv0) {
     fprintf(stderr,
             "usage: %s [--bits BITS|FILE|-] [--input TEXT|--input-file FILE] "
             "[--byte|--bit] [--packed] [--no-prelude] [--max-steps N] "
-            "[--trace]\n",
+            "[--trace] [--dump-residual FILE]\n",
             argv0);
+}
+
+/*
+ * Dumps RLOG to FILE as a sequence of fixed-width records:
+ *   magic     "RLOG0001" (8 bytes)
+ *   count     int64_le
+ *   then count records of (tag:int32_le, addr:int64_le, old:int64_le).
+ * Header writes are little-endian regardless of host so tools/measure.py
+ * can mmap/struct.unpack without worrying about portability.
+ */
+static int dump_residual_log(const char *path, long start, long end) {
+    FILE *f = fopen(path, "wb");
+    long i;
+    int64_t count;
+    unsigned char buf[20];
+    if (!f) {
+        fprintf(stderr, "dump_residual_log: cannot open %s\n", path);
+        return 0;
+    }
+    if (fwrite("RLOG0001", 1, 8, f) != 8) goto fail;
+    count = (int64_t)(end - start);
+    for (i = 0; i < 8; i++) buf[i] = (unsigned char)((count >> (8 * i)) & 0xff);
+    if (fwrite(buf, 1, 8, f) != 8) goto fail;
+    for (i = start; i < end; i++) {
+        int32_t t = (int32_t)RLOG[i].tag;
+        int64_t a = (int64_t)RLOG[i].addr;
+        int64_t o = (int64_t)RLOG[i].old;
+        int j;
+        for (j = 0; j < 4; j++) buf[j]      = (unsigned char)((t >> (8 * j)) & 0xff);
+        for (j = 0; j < 8; j++) buf[4 + j]  = (unsigned char)((a >> (8 * j)) & 0xff);
+        for (j = 0; j < 8; j++) buf[12 + j] = (unsigned char)((o >> (8 * j)) & 0xff);
+        if (fwrite(buf, 1, 20, f) != 20) goto fail;
+    }
+    fclose(f);
+    return 1;
+fail:
+    fclose(f);
+    fprintf(stderr, "dump_residual_log: write failed\n");
+    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -903,6 +943,7 @@ int main(int argc, char **argv) {
     int allow_trailing_bits;
     int runtime_input_set = 0;
     const char *source = 0;
+    const char *dump_path = 0;
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--bits") == 0) {
@@ -947,6 +988,12 @@ int main(int argc, char **argv) {
             }
             load_runtime_input_file(argv[++i]);
             runtime_input_set = 1;
+        } else if (strcmp(argv[i], "--dump-residual") == 0) {
+            if (i + 1 >= argc) {
+                print_usage(argv[0]);
+                return 1;
+            }
+            dump_path = argv[++i];
         } else if (!source) {
             source = argv[i];
         } else {
@@ -1028,6 +1075,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "  steps: %ld\n", steps);
     fprintf(stderr, "  exit code: %d\n", exit_code);
     fprintf(stderr, "  residual entries: %ld\n", RLOG_LEN - before_log);
+    if (dump_path) {
+        if (!dump_residual_log(dump_path, before_log, RLOG_LEN)) return 1;
+        fprintf(stderr, "  residual dump: %s\n", dump_path);
+    }
     fprintf(stderr, "  current term: ");
     print_term_at(stderr, C);
     fprintf(stderr, "\n");

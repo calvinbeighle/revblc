@@ -1,3 +1,7 @@
-/revblc
-/native_beta
-/instrumented_krivine/krivine_rev
+revblc
+native_beta
+instrumented_krivine/krivine_rev
+*.o
+*.rlog
+*.bin
+__pycache__/
