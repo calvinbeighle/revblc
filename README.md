@@ -77,34 +77,29 @@ tradeoff is cheap on short programs and painful on long ones.
 
 ## Further research
 
-- **Build the replay coder.** The deterministic bound is computed by
-  direct verification (run twice, `cmp`), not by an end-to-end coder. A
-  real implementation would emit `(program_bits, input_bytes,
-length_prefix)` and ship a decoder that re-runs `krivine_rev` to
-  reconstruct the residual log. Engineering, not research.
+A state-conditioned predictor is the most direct extension of these
+results. It sits between the zeroth-order coders and full replay:
+extend the C dump with `(H, C, D, a, c)` snapshots at each entry, and
+predict `addr/old` from those scalars before arithmetic coding. Scalar
+updates are expected to collapse to zero residual bits, and heap
+writes to a small delta from `H`, without paying replay CPU at decode
+time. The size of the gap closed by this predictor relative to xz on
+the long logs is the open empirical question.
 
-- **Try a state-conditioned coder.** Without re-simulation. Extend the
-  C dump with snapshots of `(H, C, D, a, c)` at each entry and let the
-  Python coder predict `addr/old` from those scalars. Many residuals
-  collapse to 0 bits (scalar updates trivially, heap allocs from `H`).
-  This pushes the floor itself down without paying replay-time CPU.
+The replay coder itself is implementation rather than investigation.
+The deterministic bound in the table is computed by running twice and
+`cmp`-ing the dumps; an end-to-end coder would emit
+`(program, input, length_prefix)` and ship `krivine_rev` with the
+decoder.
 
-- **Larger corpus.** Five programs is small. Run on Tromp's RosettaCode
-  tasks, on Justine's published `.Blc` corpus, and on a self-interpreter
-  layer (BLC running on BLC) to see how the numbers move with program
-  complexity and self-application.
+The corpus is small. Five programs cover identity, constant-function
+reduction, and two I/O patterns. The natural next data points are
+Tromp's RosettaCode entries and a self-interpreter layer (BLC running
+on BLC), to test whether the interpreter-shaped tag distribution
+holds under self-application.
 
-- **Decode-time scaling.** Replay tied with `xz -d` here only because
-  these programs are short. On `lambda-8cc` compiling C (~2 min), replay
-  loses to xz by orders of magnitude. Quantify the crossover where the
-  wire-bytes-vs-decode-CPU tradeoff flips.
-
-- **Other reversible abstract machines.** SECD, CEK, interaction-net
-  reducers (HVM). Whether the empirical-gap shape is interpreter-specific
-  or a general property of deterministic reducers is open.
-
-- **Apply to time-travel debuggers.** rr, undo.io, and friends have a
-  similar problem (compress a deterministic execution trace). The
-  zeroth-order/first-order coder results here may already be implicit in
-  their work; the explicit comparison against an entropy floor is what
-  is missing from this repo's literature search so far.
+Replay decode time scales with program runtime, so the parity with
+`xz -d` observed here disappears once the program runs longer than
+the time `xz -d` takes on its log. Quantifying the crossover means
+sweeping input sizes on `reverse.Blc` and running `lambda-8cc`
+against increasing C source lengths.
