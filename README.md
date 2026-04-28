@@ -1,56 +1,42 @@
 # revblc
 
-Reversible execution experiments for Binary Lambda Calculus.
-
-The driving question: what information must a BLC/Krivine evaluator preserve
-to be runnable backward, and how compressible is that information in
-practice?
-
-- `PROBLEM_DISCUSSION.md` — the original challenge from the redbean #lambda
-  channel.
-- `RESIDUAL_ENTROPY.md` — the empirical answer: corpus measurement of the
-  residual log.
-- `TROMP_PROTOCOL.md` — runtime details of `instrumented_krivine` (lazy
-  input, byte-mode output, packed `.Blc` parsing, reference parity).
-
-## Build and run
+Reversible BLC/Krivine evaluator with residual-stream entropy measurement.
 
 ```sh
 make test
-make test-reference   # requires Tromp's uni at /tmp/AIT
-```
-
-## Three artifacts
-
-`revblc.c` — readable Bennett-style trace-reversible Krivine reducer. `APP`
-and `ABS` need only markers; `VAR` must preserve the lookup context that
-gets overwritten.
-
-`native_beta.c` — one beta step made reversible at the calculus level
-instead of the trace level. Witnesses split by occurrence count of the bound
-variable: erasure carries the erased argument; linear carries an occurrence
-boundary; duplication carries the occurrence group.
-
-`instrumented_krivine/` — fuller evaluator with the Tromp/Justine runtime
-wrapper, lazy input, byte-mode output, packed `.Blc`, and parity against
-Tromp's `uni`. The residual log used in `RESIDUAL_ENTROPY.md` comes from
-this artifact.
-
-## Residual measurement
-
-```sh
 ./instrumented_krivine/krivine_rev examples/io/cat.blc --input 0101 \
   --dump-residual /tmp/cat.rlog
 python3 tools/measure.py /tmp/cat.rlog
 ```
 
-## Scope
+`instrumented_krivine/tromp.c` is an un-golfed standalone C version of
+Tromp's IOCCC 2012 Krivine core (`reference/tromp-krivine-ioccc2012.c`,
+Public Domain) with residual logging around every reducer mutation.
+Forward run records `(tag, addr, old)` triples; backward run consumes them
+and verifies heap, scalars, `kLazy`, output buffer, and input position
+are restored. Optional `make test-reference` does byte-for-byte parity
+against Tromp's `uni`.
 
-Bennett-style trace reversibility is well known. The piece that may be new
-is the empirical residual-entropy analysis in `RESIDUAL_ENTROPY.md`. The
-trace reducers and `native_beta.c` are baselines for that measurement.
+`revblc.c` is a smaller readable version on raw BLC syntax.
+`native_beta.c` rewrites one beta step in native-witness style instead of
+trace logging (erasure / linear / duplication witnesses).
 
-`native_beta.c` rewrites one rule in native-witness style; `revblc.c` and
-`instrumented_krivine` still log a side trace. Synthesizing the two — a
-Krivine machine whose `APP`, `ABS`, and `VAR` carry native witnesses — has
-not been started.
+## Residual entropy
+
+Five-program corpus with `--dump-residual`:
+
+| program      | entries |    raw | floor (b/e) | floor B | best off-shelf | gap × |
+| ------------ | ------: | -----: | ----------: | ------: | -------------: | ----: |
+| identity_app |      74 |   1480 |        4.73 |      44 |     214 (zstd) |  4.86 |
+| k_i_i        |      90 |   1800 |        4.81 |      54 |     248 (zstd) |  4.59 |
+| cat (bit)    |     863 |  17260 |        5.98 |     645 |    1356 (zstd) |  2.10 |
+| cat (byte)   |    4515 |  90300 |        6.29 |    3550 |      5688 (xz) |  1.60 |
+| reverse.Blc  |    8504 | 170080 |        6.62 |    7037 |     10164 (xz) |  1.44 |
+
+Floor = zeroth-order joint entropy of `(tag, addr_delta, old_delta)` with
+deltas taken per-tag. zstd `--ultra -22`; xz `-9e`. Tag distribution is
+interpreter-shaped, not program-shaped (`heap ~28%`, `C/D ~15%`, `a/c
+~10%` across all five). xz/zstd are within ~1.4× of the floor on long
+logs, ~5× on short ones. The floor is not the actual lower bound: a coder
+conditioning on machine state (`H`, `C`, `D`, ...) at each step would be
+tighter. Not implemented.
