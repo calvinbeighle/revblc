@@ -537,7 +537,7 @@ def main():
     )
     ap.add_argument(
         "--krivine",
-        default="./instrumented_krivine/krivine_rev",
+        default="./krivine/krivine_rev",
         help="path to krivine_rev binary",
     )
     args = ap.parse_args()

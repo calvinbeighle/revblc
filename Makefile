@@ -17,13 +17,14 @@ native: native_beta
 	./native_beta examples/native_duplication.blc
 
 tromp:
-	$(MAKE) -C instrumented_krivine
+	$(MAKE) -C krivine
 
 traces: revblc
+	@mkdir -p traces
 	./revblc examples/identity_app.blc > traces/identity_app.txt
 	./revblc examples/k_i_i.blc > traces/k_i_i.txt
 	./revblc examples/closure_env.blc > traces/closure_env.txt
-	$(MAKE) -C instrumented_krivine traces
+	$(MAKE) -C krivine traces
 
 test: revblc native_beta
 	./revblc examples/identity.blc
@@ -38,11 +39,11 @@ test: revblc native_beta
 	else \
 		grep -q "stuck free variable: yes" /tmp/revblc-stuck.txt; \
 	fi
-	$(MAKE) -C instrumented_krivine test
+	$(MAKE) -C krivine test
 
 test-reference:
-	$(MAKE) -C instrumented_krivine test-reference
+	$(MAKE) -C krivine test-reference
 
 clean:
 	rm -f revblc native_beta
-	$(MAKE) -C instrumented_krivine clean
+	$(MAKE) -C krivine clean

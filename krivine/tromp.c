@@ -5,7 +5,7 @@
  * of the transition structure in John Tromp's IOCCC 2012 lambda interpreter.
  * The original pasted source is kept at:
  *
- *   ../tromp-krivine-ioccc2012.c
+ *   ./tromp-ioccc2012.c
  *
  * The IOCCC expression is intentionally not preserved here. The point of this
  * file is to expose every mutable operation, log the old value, run forward,

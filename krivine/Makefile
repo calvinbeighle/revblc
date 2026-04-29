@@ -54,6 +54,7 @@ test-reference: krivine_rev
 	@printf 'reference parity: yes (cat, reverse.Blc)\n'
 
 traces: krivine_rev
+	@mkdir -p traces
 	./krivine_rev ../examples/identity.blc > traces/identity.txt 2>&1
 	./krivine_rev ../examples/identity_app.blc > traces/identity_app.txt 2>&1
 	./krivine_rev ../examples/k_i_i.blc > traces/k_i_i.txt 2>&1

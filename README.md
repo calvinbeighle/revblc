@@ -7,9 +7,9 @@ make test
 python3 measure.py --corpus
 ```
 
-`instrumented_krivine/tromp.c` is an un-golfed standalone C version of
-Tromp's IOCCC 2012 Krivine core (`tromp-krivine-ioccc2012.c`, Public
-Domain) with residual logging around every reducer mutation. Forward run
+`krivine/tromp.c` is an un-golfed standalone C version of Tromp's
+IOCCC 2012 Krivine core (`krivine/tromp-ioccc2012.c`, Public Domain)
+with residual logging around every reducer mutation. Forward run
 records `(tag, addr, old)` triples; backward run consumes them and
 verifies heap, scalars, `kLazy`, output buffer, and input position are
 restored. Optional `make test-reference` does byte-for-byte parity

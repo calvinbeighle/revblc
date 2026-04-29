@@ -1,8 +1,8 @@
 revblc
 native_beta
-instrumented_krivine/krivine_rev
+krivine/krivine_rev
 traces/
-instrumented_krivine/traces/
+krivine/traces/
 *.o
 *.rlog
 *.bin
